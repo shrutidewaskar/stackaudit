@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { demoReport } from "@/services/demoReport";
 import Hero from "@/components/results/Hero";
 import ExecutiveSummary from "@/components/results/ExecutiveSummary";
@@ -17,7 +18,31 @@ export default function DemoResultsPage() {
     <div className="flex min-h-screen flex-col bg-black text-white">
       <Navbar />
 
-      <main className="flex-grow mx-auto w-full max-w-6xl px-6 py-16">
+      <main className="flex-grow mx-auto w-full max-w-6xl px-6 py-10">
+        {/* Demo Indicator Banner */}
+        <div className="mb-8 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">💡</span>
+            <div>
+              <p className="text-xs font-bold text-amber-300">You are viewing a Demo Audit Report</p>
+              <p className="text-[11px] text-zinc-400 mt-0.5">Features are view-only. Log in or create an account to run your own stack audits.</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Link 
+              href="/register" 
+              className="rounded-lg bg-amber-500 px-3.5 py-1.5 text-[10px] font-bold text-black hover:bg-amber-400 transition-all"
+            >
+              Sign Up Free
+            </Link>
+            <Link 
+              href="/login" 
+              className="rounded-lg border border-white/10 px-3.5 py-1.5 text-[10px] font-bold text-zinc-300 hover:text-white transition-all"
+            >
+              Log In
+            </Link>
+          </div>
+        </div>
         <Hero
           monthly={demoReport.totalMonthlySavings}
           annual={demoReport.totalAnnualSavings}

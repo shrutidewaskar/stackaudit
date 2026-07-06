@@ -19,7 +19,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Plus",
       reason:
-        "ChatGPT Team is built for collaboration. Plus is a better fit for a solo user.",
+        "ChatGPT Team is built for workspaces with multiple collaborators. For a single seat, ChatGPT Plus provides identical model capabilities, custom GPT access, and higher priority usage limits at a lower cost.",
     };
   }
 
@@ -27,7 +27,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Team",
       reason:
-        "This team size usually does not need enterprise controls yet.",
+        "ChatGPT Enterprise is designed for larger organizations requiring centralized billing, single sign-on (SSO), and custom domain controls. Based on your small team size, ChatGPT Team provides identical GPT-4o capabilities and shared workspaces at a significantly lower cost.",
     };
   }
 
@@ -35,7 +35,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Team",
       reason:
-        "Smaller teams can typically step down from enterprise pricing.",
+        "Claude Enterprise is tailored for large-scale deployments needing administrative controls and custom SAML integrations. For teams under 5 users, Claude Team provides access to the same 200k context window and project folders without enterprise overhead.",
     };
   }
 
@@ -43,7 +43,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Pro",
       reason:
-        "Claude Pro is enough for most small-team usage patterns.",
+        "Claude Team/Max plans require minimum seat allocations and administrative setup. If you are operating with 3 or fewer members, Claude Pro is sufficient to handle standard chat, coding, and file analysis workflows.",
     };
   }
 
@@ -51,7 +51,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Pro",
       reason:
-        "Cursor Pro offers strong coverage for smaller teams at a lower cost.",
+        "Cursor Business is designed for larger organizations needing centralized member management and SAML controls. Based on your small team profile, Cursor Pro provides the same unlimited autocomplete, fast model queries, and chat capabilities at a lower price point.",
     };
   }
 
@@ -59,7 +59,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Business",
       reason:
-        "Enterprise features appear oversized for this team profile.",
+        "Cursor Enterprise features custom billing terms and bespoke data storage policies. A developer team of this size can transition to Cursor Business to utilize central seat provisioning while eliminating enterprise pricing premiums.",
     };
   }
 
@@ -67,7 +67,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Business",
       reason:
-        "Business covers most team workflows without enterprise overhead.",
+        "GitHub Copilot Enterprise includes custom indexing for internal repositories and advanced documentation queries. Based on your team size, the Business tier delivers standard autocomplete, chat, and CLI features without paying for advanced enterprise indexes.",
     };
   }
 
@@ -75,7 +75,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Individual",
       reason:
-        "A single contributor does not need a team plan.",
+        "GitHub Copilot Business provides organization management and audit logs. A single contributor or solo developer can utilize Copilot Individual for personal workspaces to achieve identical IDE autocomplete suggestions.",
     };
   }
 
@@ -83,7 +83,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Pro",
       reason:
-        "The Pro tier is generally sufficient for lightweight usage.",
+        "Gemini Ultra/Advanced focuses on intensive workspace integrations. The Pro plan covers standard coding workflows and documentation search templates at lower rates.",
     };
   }
 
@@ -91,7 +91,7 @@ function getRecommendationRule(
     return {
       recommendedPlan: "Pro",
       reason:
-        "Smaller teams can usually step down to the Pro tier.",
+        "Windsurf Teams covers organization policies. Smaller developer cohorts can step down to the Pro tier while retaining access to the full Cascade flow and terminal agent capabilities.",
     };
   }
 

@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
       useCase,
       audit,
       tools,
+      userId,
     } = body;
 
     // Validate input
@@ -37,7 +38,8 @@ export async function POST(request: NextRequest) {
         optimizationScore: audit.optimizationScore.label,
         summary: summary,
       },
-      tools
+      tools,
+      userId || null
     );
 
     if (error || !id) {

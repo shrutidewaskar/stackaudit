@@ -15,6 +15,7 @@ export interface AuditRow {
   percentage_saved: number;
   optimization_score: string;
   summary: string;
+  user_id?: string | null;
 }
 
 export interface AuditInsert {
@@ -27,6 +28,7 @@ export interface AuditInsert {
   percentage_saved: number;
   optimization_score: string;
   summary: string;
+  user_id?: string | null;
 }
 
 export interface AuditToolRow {

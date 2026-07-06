@@ -8,6 +8,7 @@ import TeamInfo from "@/components/audit/TeamInfo";
 import ToolCard from "@/components/audit/ToolCard";
 import { runAudit } from "@/rules/auditEngine";
 import { loadAudit, saveAudit, saveResults } from "@/utils/storage";
+import { supabase } from "@/lib/supabase";
 
 import { AuditFormData, ToolEntry } from "@/types/audit";
 
@@ -112,6 +113,10 @@ export default function AuditPage() {
           };
         });
 
+        // Get current user if authenticated
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || null;
+
         // Save to database via API
         const response = await fetch("/api/audit", {
           method: "POST",
@@ -121,6 +126,7 @@ export default function AuditPage() {
             useCase: audit.useCase,
             audit: result,
             tools: toolsWithDetails,
+            userId,
           }),
         });
 

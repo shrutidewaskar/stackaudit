@@ -17,9 +17,14 @@ export default function Hero({
     <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.18),_transparent_32%),linear-gradient(135deg,_rgba(24,24,27,0.98),_rgba(9,9,11,0.98))] p-8 shadow-[0_40px_120px_rgba(0,0,0,0.35)] md:p-10">
       <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300/90">
-            Audit Complete 🎉
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300/90">
+              Audit Complete 🎉
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-zinc-400">
+              Pricing last verified: July 2026
+            </span>
+          </div>
 
           <h1 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">
             Potential Savings

@@ -35,7 +35,8 @@ export async function saveAudit(
     monthlySavings: number;
     reason: string;
     severity: string;
-  }[]
+  }[],
+  userId: string | null = null
 ): Promise<{ id: string; error: string | null }> {
   if (!isSupabaseConfigured) {
     try {
@@ -55,6 +56,7 @@ export async function saveAudit(
         percentage_saved: auditData.percentageSaved,
         optimization_score: auditData.optimizationScore,
         summary: auditData.summary,
+        user_id: userId,
       };
 
       mockAudits.set(id, auditRow);
@@ -95,6 +97,7 @@ export async function saveAudit(
       percentage_saved: auditData.percentageSaved,
       optimization_score: auditData.optimizationScore,
       summary: auditData.summary,
+      user_id: userId,
     };
 
     // Insert audit

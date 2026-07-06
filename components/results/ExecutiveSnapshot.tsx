@@ -122,7 +122,7 @@ export default function ExecutiveSnapshot({ result }: Props) {
         </div>
 
         <p className="mt-6 text-xs text-zinc-400 leading-relaxed border-t border-white/5 pt-4">
-          Benchmarks compiled from stack audits of 250+ tech teams.
+          Placeholder industry benchmarks for demonstration. Benchmarks compiled from stack audits of 250+ tech teams.
         </p>
       </div>
 
