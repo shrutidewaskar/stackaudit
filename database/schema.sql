@@ -90,3 +90,56 @@ CREATE POLICY "Public read access to leads"
   ON public.leads
   FOR SELECT
   USING (true);
+
+-- Chat Sessions table
+CREATE TABLE IF NOT EXISTS public.chat_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  audit_id UUID REFERENCES public.audits(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  current_intent TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON public.chat_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_audit_id ON public.chat_sessions(audit_id);
+
+-- Chat Messages table
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+  content TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON public.chat_messages(session_id);
+
+-- Conversation Context table
+CREATE TABLE IF NOT EXISTS public.conversation_context (
+  session_id UUID PRIMARY KEY REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+  company_size INTEGER,
+  budget NUMERIC,
+  tools JSONB DEFAULT '[]'::jsonb NOT NULL,
+  recommendations JSONB DEFAULT '[]'::jsonb NOT NULL,
+  optimization_score NUMERIC,
+  future_growth TEXT
+);
+
+-- Enable RLS
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversation_context ENABLE ROW LEVEL SECURITY;
+
+-- Policies for chat sessions
+CREATE POLICY "Public read access to chat_sessions" ON public.chat_sessions FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert chat_sessions" ON public.chat_sessions FOR INSERT WITH CHECK (true);
+
+-- Policies for chat messages
+CREATE POLICY "Public read access to chat_messages" ON public.chat_messages FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert chat_messages" ON public.chat_messages FOR INSERT WITH CHECK (true);
+
+-- Policies for conversation context
+CREATE POLICY "Public read access to conversation_context" ON public.conversation_context FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert conversation_context" ON public.conversation_context FOR INSERT WITH CHECK (true);

@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   description: branding.description,
 };
 
+import { ConversationProvider } from "@/lib/ai/conversation/hooks/ConversationContext";
+import { ChatWidget } from "@/components/intelligence/ChatWidget";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,7 +34,12 @@ export default function RootLayout({
       className={`${poppins.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>{children}</body>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <ConversationProvider>
+          {children}
+          <ChatWidget />
+        </ConversationProvider>
+      </body>
     </html>
   );
 }
