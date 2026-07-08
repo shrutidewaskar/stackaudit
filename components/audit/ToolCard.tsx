@@ -35,66 +35,78 @@ export default function ToolCard({
         </button>
       </div>
 
-      <select
-        value={tool.tool}
-        onChange={(e) =>
-          updateTool({
-            ...tool,
-            tool: e.target.value,
-            plan: "",
-          })
-        }
-        className="w-full rounded-xl border border-white/10 bg-black p-3"
-      >
-        <option value="">Select Tool</option>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-white/50 px-1">Select Tool</label>
+        <select
+          value={tool.tool}
+          onChange={(e) =>
+            updateTool({
+              ...tool,
+              tool: e.target.value,
+              plan: "",
+            })
+          }
+          className="w-full rounded-xl border border-white/10 bg-black p-3 text-white"
+        >
+          <option value="">Select Tool</option>
 
-        {Object.keys(supportedTools).map((name) => (
-          <option key={name}>{name}</option>
-        ))}
-      </select>
+          {Object.keys(supportedTools).map((name) => (
+            <option key={name}>{name}</option>
+          ))}
+        </select>
+      </div>
 
-      <select
-        value={tool.plan}
-        onChange={(e) =>
-          updateTool({
-            ...tool,
-            plan: e.target.value,
-          })
-        }
-        className="w-full rounded-xl border border-white/10 bg-black p-3"
-      >
-        <option value="">Select Plan</option>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-white/50 px-1">Select Plan</label>
+        <select
+          value={tool.plan}
+          onChange={(e) =>
+            updateTool({
+              ...tool,
+              plan: e.target.value,
+            })
+          }
+          className="w-full rounded-xl border border-white/10 bg-black p-3 text-white"
+        >
+          <option value="">Select Plan</option>
 
-        {plans.map((plan) => (
-          <option key={plan}>{plan}</option>
-        ))}
-      </select>
+          {plans.map((plan) => (
+            <option key={plan}>{plan}</option>
+          ))}
+        </select>
+      </div>
 
-      <input
-        type="number"
-        placeholder="Monthly Spend ($)"
-        value={tool.monthlySpend}
-        onChange={(e) =>
-          updateTool({
-            ...tool,
-            monthlySpend: Number(e.target.value),
-          })
-        }
-        className="w-full rounded-xl border border-white/10 bg-black p-3"
-      />
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-white/50 px-1">Monthly Spend ($)</label>
+        <input
+          type="number"
+          placeholder="Monthly Spend ($)"
+          value={tool.monthlySpend}
+          onChange={(e) =>
+            updateTool({
+              ...tool,
+              monthlySpend: Number(e.target.value),
+            })
+          }
+          className="w-full rounded-xl border border-white/10 bg-black p-3 text-white"
+        />
+      </div>
 
-      <input
-        type="number"
-        placeholder="Seats"
-        value={tool.seats}
-        onChange={(e) =>
-          updateTool({
-            ...tool,
-            seats: Number(e.target.value),
-          })
-        }
-        className="w-full rounded-xl border border-white/10 bg-black p-3"
-      />
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-white/50 px-1">Seats</label>
+        <input
+          type="number"
+          placeholder="Seats"
+          value={tool.seats}
+          onChange={(e) =>
+            updateTool({
+              ...tool,
+              seats: Number(e.target.value),
+            })
+          }
+          className="w-full rounded-xl border border-white/10 bg-black p-3 text-white"
+        />
+      </div>
     </div>
   );
 }
