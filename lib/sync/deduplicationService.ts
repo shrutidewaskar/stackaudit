@@ -1,46 +1,39 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
-
-const processedEventIds = new Set<string>();
+const mockProcessedEventIds = new Set<string>();
 
 export class DeduplicationService {
+  /**
+   * Checks if an event ID has already been recorded.
+   * In DEV_MOCK_MODE / test mode, checks the in-memory set.
+   * In production mode, queries the durable `usage_events` table in PostgreSQL.
+   */
   public static async isDuplicate(eventId: string): Promise<boolean> {
-    if (processedEventIds.has(eventId)) {
-      return true;
-    }
-
-    if (!isSupabaseConfigured) {
-      processedEventIds.add(eventId);
-      return false;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("usage_events")
-        .select("event_id")
-        .eq("event_id", eventId)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        processedEventIds.add(eventId);
+    if (isDevMockMode()) {
+      if (mockProcessedEventIds.has(eventId)) {
         return true;
       }
-
-      processedEventIds.add(eventId);
-      return false;
-    } catch {
-      processedEventIds.add(eventId);
+      mockProcessedEventIds.add(eventId);
       return false;
     }
+
+    assertSupabaseConfigured();
+
+    const { data, error } = await supabase
+      .from("usage_events")
+      .select("event_id")
+      .eq("event_id", eventId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Database Error [usage_events.checkDuplicate]: ${error.message}`);
+    }
+
+    return Boolean(data);
   }
 
-  public static clearCache() {
-    processedEventIds.clear();
+  public static clearCache(): void {
+    mockProcessedEventIds.clear();
   }
 }
+

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { employeeService } from "@/services/enterprise/EmployeeService";
+import { requireOrganizationMember, requirePermission } from "@/lib/auth/serverAuth";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = request.nextUrl;
-    const orgId = searchParams.get("orgId") || "novatech-labs-uuid";
+    const authResult = await requireOrganizationMember(request);
+    if ("response" in authResult) return authResult.response;
 
-    const list = await employeeService.list(orgId);
+    const list = await employeeService.list(authResult.auth.organizationId);
     return NextResponse.json(list);
   } catch (error) {
     console.error("API error listing employees:", error);
@@ -16,17 +17,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { id, orgId, departmentId, name, email, jobTitle, status } = body;
+    const authResult = await requirePermission(request, "canEditDetails");
+    if ("response" in authResult) return authResult.response;
 
-    if (!orgId || !name || !email) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const body = await request.json();
+    const { id, departmentId, name, email, jobTitle, status } = body;
+
+    if (!name || !email) {
+      return NextResponse.json({ error: "Missing required fields (name, email)" }, { status: 400 });
     }
 
     const empId = id || `emp-${Math.random().toString(36).substring(2)}`;
     const emp = await employeeService.create({
       id: empId,
-      organization_id: orgId,
+      organization_id: authResult.auth.organizationId,
       department_id: departmentId || null,
       name,
       email,
@@ -42,11 +46,19 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const authResult = await requirePermission(request, "canEditDetails");
+    if ("response" in authResult) return authResult.response;
+
     const { searchParams } = request.nextUrl;
     const id = searchParams.get("id");
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    const emp = await employeeService.get(id);
+    if (!emp || emp.organization_id !== authResult.auth.organizationId) {
+      return NextResponse.json({ error: "Employee not found in your organization" }, { status: 404 });
     }
 
     const success = await employeeService.delete(id);

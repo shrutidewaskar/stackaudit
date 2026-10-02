@@ -1,13 +1,7 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 import type { Audit, AuditTool, Lead, AuditInsert, AuditToolInsert, LeadInsert } from "@/types/database";
 
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
-
-// In-memory store for fallback when Supabase is not configured
+// In-memory store for isolated dev/test mode
 const mockAudits = new Map<string, Audit>();
 const mockAuditTools = new Map<string, AuditTool[]>();
 const mockLeads = new Map<string, Lead[]>();
@@ -38,7 +32,7 @@ export async function saveAudit(
   }[],
   userId: string | null = null
 ): Promise<{ id: string; error: string | null }> {
-  if (!isSupabaseConfigured) {
+  if (isDevMockMode()) {
     try {
       const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
         ? crypto.randomUUID() 
@@ -87,6 +81,7 @@ export async function saveAudit(
   }
 
   try {
+    assertSupabaseConfigured();
     const auditInsert: AuditInsert = {
       team_size: teamSize,
       use_case: useCase,
@@ -150,7 +145,7 @@ export async function getAudit(
   tools: AuditTool[];
   error: string | null;
 }> {
-  if (!isSupabaseConfigured) {
+  if (isDevMockMode()) {
     const audit = mockAudits.get(id) || null;
     const tools = mockAuditTools.get(id) || [];
     return {
@@ -161,12 +156,12 @@ export async function getAudit(
   }
 
   try {
-    // Get audit
+    assertSupabaseConfigured();
     const { data: audit, error: auditError } = await supabase
       .from("audits")
       .select("*")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (auditError) {
       return { audit: null, tools: [], error: auditError.message };
@@ -210,7 +205,7 @@ export async function saveLead(
   role: string | null,
   teamSize: string | null
 ): Promise<{ id: string | null; error: string | null }> {
-  if (!isSupabaseConfigured) {
+  if (isDevMockMode()) {
     try {
       const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
         ? crypto.randomUUID() 
@@ -240,6 +235,7 @@ export async function saveLead(
   }
 
   try {
+    assertSupabaseConfigured();
     const leadInsert: LeadInsert = {
       audit_id: auditId,
       email,
@@ -271,11 +267,12 @@ export async function saveLead(
  * Get leads for an audit
  */
 export async function getLeads(auditId: string): Promise<Lead[]> {
-  if (!isSupabaseConfigured) {
+  if (isDevMockMode()) {
     return mockLeads.get(auditId) || [];
   }
 
   try {
+    assertSupabaseConfigured();
     const { data, error } = await supabase
       .from("leads")
       .select("*")

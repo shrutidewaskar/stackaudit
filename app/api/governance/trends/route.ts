@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GovernanceEngine } from "@/lib/governance/engine";
+import { requireOrganizationMember } from "@/lib/auth/serverAuth";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = request.nextUrl;
-    const orgId = searchParams.get("orgId") || "novatech-labs-uuid";
+    const authResult = await requireOrganizationMember(request);
+    if ("response" in authResult) return authResult.response;
 
-    // Mock history trends snapshots
+    const orgId = authResult.auth.organizationId;
     const snapAugust = GovernanceEngine.generateSnapshot(orgId);
     const snapJuly = {
       ...snapAugust,

@@ -4,20 +4,28 @@ import { ContextCompression } from "@/lib/ai/memory/compression";
 import { AIContextBuilder } from "@/lib/ai/context/contextBuilder";
 import { providerRegistry } from "@/lib/ai/providers/registry";
 import { ChatMessage } from "@/lib/ai/memory/types";
+import { requireOrganizationMember } from "@/lib/auth/serverAuth";
 
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireOrganizationMember(request);
+    if ("response" in authResult) return authResult.response;
+
     const body = await request.json();
-    const { sessionId, content, userId, orgId } = body;
+    const { sessionId, content } = body;
 
     if (!sessionId || !content) {
       return NextResponse.json({ error: "Missing sessionId or content" }, { status: 400 });
     }
 
-    // 1. Fetch current session
+    // 1. Fetch current session and verify tenant ownership
     const session = await memoryService.getSession(sessionId);
     if (!session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    if (session.organization_id && session.organization_id !== authResult.auth.organizationId) {
+      return NextResponse.json({ error: "Session not found in your organization" }, { status: 404 });
     }
 
     // 2. Save user message (Level 1 memory)
@@ -59,9 +67,9 @@ export async function POST(request: NextRequest) {
       last_updated: new Date().toISOString()
     });
 
-    // 5. Build secure organization grounding context using AIContextBuilder
-    const resolvedOrgId = orgId || "novatech-labs-uuid";
-    const resolvedUserId = userId || "user-compliance-officer";
+    // 5. Build secure organization grounding context using AIContextBuilder with authenticated identity
+    const resolvedOrgId = authResult.auth.organizationId;
+    const resolvedUserId = authResult.auth.user.id;
     const aiContext = await AIContextBuilder.buildContext(resolvedOrgId, resolvedUserId, content);
 
     // 6. Invoke dynamic provider (MockProvider or GeminiProvider)

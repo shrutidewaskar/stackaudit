@@ -2,13 +2,7 @@ import { SyncJob, SyncStatus } from "./types";
 import { IngestionService } from "./ingestionService";
 import { AggregationService } from "./aggregationService";
 import { UsageEvent } from "../usage/types/types";
-import { supabase } from "@/lib/supabase";
-
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 
 export const mockSyncJobsDB: SyncJob[] = [];
 
@@ -43,20 +37,19 @@ export class SyncManager {
       updatedAt: new Date().toISOString()
     };
 
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       mockSyncJobsDB.push(job);
     } else {
-      try {
-        const { error } = await supabase.from("sync_jobs").insert({
-          id: job.id,
-          organization_id: job.organizationId,
-          connector_id: job.connectorId,
-          status: job.status,
-          started_at: job.startedAt
-        });
-        if (error) throw error;
-      } catch {
-        mockSyncJobsDB.push(job);
+      assertSupabaseConfigured();
+      const { error } = await supabase.from("sync_jobs").insert({
+        id: job.id,
+        organization_id: job.organizationId,
+        connector_id: job.connectorId,
+        status: job.status,
+        started_at: job.startedAt
+      });
+      if (error) {
+        throw new Error(`Database Error [sync_jobs.insert]: ${error.message}`);
       }
     }
 
@@ -69,42 +62,78 @@ export class SyncManager {
     stats: { received: number; accepted: number; rejected: number; duplicates: number },
     errorMsg: string | null = null
   ): Promise<void> {
-    const job = mockSyncJobsDB.find((j) => j.id === jobId);
     const completedAt = ["completed", "failed", "partial"].includes(status)
       ? new Date().toISOString()
       : null;
 
-    if (job) {
-      job.status = status;
-      job.eventsReceived = stats.received;
-      job.eventsAccepted = stats.accepted;
-      job.eventsRejected = stats.rejected;
-      job.eventsDeduplicated = stats.duplicates;
-      job.errorMessage = errorMsg;
-      job.completedAt = completedAt;
-      job.updatedAt = new Date().toISOString();
+    if (isDevMockMode()) {
+      const job = mockSyncJobsDB.find((j) => j.id === jobId);
+      if (job) {
+        job.status = status;
+        job.eventsReceived = stats.received;
+        job.eventsAccepted = stats.accepted;
+        job.eventsRejected = stats.rejected;
+        job.eventsDeduplicated = stats.duplicates;
+        job.errorMessage = errorMsg;
+        job.completedAt = completedAt;
+        job.updatedAt = new Date().toISOString();
+      }
+      return;
     }
 
-    if (isSupabaseConfigured) {
-      try {
-        const { error } = await supabase
-          .from("sync_jobs")
-          .update({
-            status,
-            completed_at: completedAt,
-            events_received: stats.received,
-            events_accepted: stats.accepted,
-            events_rejected: stats.rejected,
-            events_deduplicated: stats.duplicates,
-            error_message: errorMsg,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", jobId);
-        if (error) throw error;
-      } catch (err) {
-        console.error("Failed to update sync job in database:", err);
-      }
+    assertSupabaseConfigured();
+    const { error } = await supabase
+      .from("sync_jobs")
+      .update({
+        status,
+        completed_at: completedAt,
+        events_received: stats.received,
+        events_accepted: stats.accepted,
+        events_rejected: stats.rejected,
+        events_deduplicated: stats.duplicates,
+        error_message: errorMsg,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", jobId);
+
+    if (error) {
+      throw new Error(`Database Error [sync_jobs.update]: ${error.message}`);
     }
+  }
+
+  public async getJob(jobId: string): Promise<SyncJob | null> {
+    if (isDevMockMode()) {
+      return mockSyncJobsDB.find((j) => j.id === jobId) || null;
+    }
+
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("sync_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Database Error [sync_jobs.getJob]: ${error.message}`);
+    }
+
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      organizationId: data.organization_id,
+      connectorId: data.connector_id,
+      status: data.status,
+      startedAt: data.started_at,
+      completedAt: data.completed_at,
+      eventsReceived: data.events_received ?? 0,
+      eventsAccepted: data.events_accepted ?? 0,
+      eventsRejected: data.events_rejected ?? 0,
+      eventsDeduplicated: data.events_deduplicated ?? 0,
+      errorMessage: data.error_message,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
   }
 
   public async runBatchIngestion(
@@ -144,10 +173,13 @@ export class SyncManager {
         { received: events.length, accepted: 0, rejected: events.length, duplicates: 0 },
         err instanceof Error ? err.message : "Ingestion crash"
       );
+      throw err;
     }
 
-    return mockSyncJobsDB.find((j) => j.id === job.id) || job;
+    const fetchedJob = await this.getJob(job.id);
+    return fetchedJob || job;
   }
 }
 
 export const syncManager = SyncManager.getInstance();
+

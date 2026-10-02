@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { IngestionService } from "@/lib/sync/ingestionService";
 import { SyncManager } from "@/lib/sync/syncManager";
+import { requireOrganizationMember } from "@/lib/auth/serverAuth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,9 +14,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Process batch through validation, privacy checks, normalizations, and deduplication
+    // Authenticate caller and ensure membership in requested organization
+    const authResult = await requireOrganizationMember(request, organizationId);
+    if ("response" in authResult) {
+      return authResult.response;
+    }
+
+    const { auth } = authResult;
+
+    // Process batch through validation, privacy checks, normalizations, deduplication, and persistence
     const manager = SyncManager.getInstance();
-    const job = await manager.runBatchIngestion(organizationId, events, "api-endpoint-connector");
+    const job = await manager.runBatchIngestion(auth.organizationId, events, "api-endpoint-connector");
 
     return NextResponse.json({
       jobId: job.id,
@@ -31,3 +39,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+

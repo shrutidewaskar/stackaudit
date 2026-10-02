@@ -1,15 +1,9 @@
 import { UsageEvent } from "../usage/types/types";
 import { DailyUsage, EmployeeUsageDaily } from "./types";
 import { mockUsageEventsDB } from "./ingestionService";
-import { supabase } from "@/lib/supabase";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
-
-// Fallback in-memory stores for aggregations
+// In-memory stores for isolated dev/test mode aggregations
 export const mockDailyUsageDB: DailyUsage[] = [];
 export const mockEmployeeUsageDailyDB: EmployeeUsageDaily[] = [];
 
@@ -18,45 +12,43 @@ export class AggregationService {
     // 1. Fetch raw events matching orgId and date
     let events: UsageEvent[] = [];
 
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       events = mockUsageEventsDB.filter(
         (e) => e.organizationId === orgId && e.sessionStart.startsWith(dateStr)
       );
     } else {
-      try {
-        const { data, error } = await supabase
-          .from("usage_events")
-          .select("*")
-          .eq("organization_id", orgId)
-          .gte("session_start", `${dateStr}T00:00:00Z`)
-          .lte("session_start", `${dateStr}T23:59:59Z`);
-        
-        if (error) throw error;
-        events = (data || []).map((row) => ({
-          eventId: row.event_id,
-          organizationId: row.organization_id,
-          employeeId: row.employee_id,
-          workspaceId: row.workspace_id,
-          connectorId: row.connector_id,
-          provider: row.provider,
-          tool: row.tool,
-          source: row.source,
-          domain: row.domain,
-          sessionStart: row.session_start,
-          sessionEnd: row.session_end,
-          activeDuration: row.active_duration,
-          idleDuration: row.idle_duration,
-          tabVisibility: row.tab_visibility,
-          device: row.device,
-          browser: row.browser,
-          createdAt: row.created_at,
-          metadata: row.metadata
-        }));
-      } catch {
-        events = mockUsageEventsDB.filter(
-          (e) => e.organizationId === orgId && e.sessionStart.startsWith(dateStr)
-        );
+      assertSupabaseConfigured();
+      const { data, error } = await supabase
+        .from("usage_events")
+        .select("*")
+        .eq("organization_id", orgId)
+        .gte("session_start", `${dateStr}T00:00:00Z`)
+        .lte("session_start", `${dateStr}T23:59:59Z`);
+      
+      if (error) {
+        throw new Error(`Database Error [usage_events.selectForAggregation]: ${error.message}`);
       }
+
+      events = (data || []).map((row) => ({
+        eventId: row.event_id,
+        organizationId: row.organization_id,
+        employeeId: row.employee_id,
+        workspaceId: row.workspace_id,
+        connectorId: row.connector_id,
+        provider: row.provider,
+        tool: row.tool,
+        source: row.source,
+        domain: row.domain,
+        sessionStart: row.session_start,
+        sessionEnd: row.session_end,
+        activeDuration: row.active_duration,
+        idleDuration: row.idle_duration,
+        tabVisibility: row.tab_visibility,
+        device: row.device,
+        browser: row.browser,
+        createdAt: row.created_at,
+        metadata: row.metadata
+      }));
     }
 
     if (events.length === 0) return;
@@ -106,27 +98,27 @@ export class AggregationService {
         updatedAt: new Date().toISOString()
       };
 
-      if (!isSupabaseConfigured) {
+      if (isDevMockMode()) {
         mockDailyUsageDB.push(daily);
       } else {
-        try {
-          const { error } = await supabase.from("daily_usage").upsert({
-            organization_id: daily.organizationId,
-            date: daily.date,
-            provider: daily.provider,
-            tool: daily.tool,
-            department_id: daily.departmentId,
-            active_users: daily.activeUsers,
-            sessions: daily.sessions,
-            active_minutes: daily.activeMinutes,
-            idle_minutes: daily.idleMinutes,
-            total_minutes: daily.totalMinutes,
-            average_session_minutes: daily.averageSessionMinutes,
-            last_activity_at: daily.lastActivityAt
-          });
-          if (error) throw error;
-        } catch {
-          mockDailyUsageDB.push(daily);
+        assertSupabaseConfigured();
+        const { error } = await supabase.from("daily_usage").upsert({
+          organization_id: daily.organizationId,
+          date: daily.date,
+          provider: daily.provider,
+          tool: daily.tool,
+          department_id: daily.departmentId,
+          active_users: daily.activeUsers,
+          sessions: daily.sessions,
+          active_minutes: daily.activeMinutes,
+          idle_minutes: daily.idleMinutes,
+          total_minutes: daily.totalMinutes,
+          average_session_minutes: daily.averageSessionMinutes,
+          last_activity_at: daily.lastActivityAt
+        });
+
+        if (error) {
+          throw new Error(`Database Error [daily_usage.upsert]: ${error.message}`);
         }
       }
     }
@@ -167,25 +159,25 @@ export class AggregationService {
         createdAt: new Date().toISOString()
       };
 
-      if (!isSupabaseConfigured) {
+      if (isDevMockMode()) {
         mockEmployeeUsageDailyDB.push(empDaily);
       } else {
-        try {
-          const { error } = await supabase.from("employee_usage_daily").upsert({
-            organization_id: empDaily.organizationId,
-            employee_id: empDaily.employeeId,
-            department_id: empDaily.departmentId,
-            date: empDaily.date,
-            provider: empDaily.provider,
-            tool: empDaily.tool,
-            sessions: empDaily.sessions,
-            active_minutes: empDaily.activeMinutes,
-            idle_minutes: empDaily.idleMinutes,
-            last_activity_at: empDaily.lastActivityAt
-          });
-          if (error) throw error;
-        } catch {
-          mockEmployeeUsageDailyDB.push(empDaily);
+        assertSupabaseConfigured();
+        const { error } = await supabase.from("employee_usage_daily").upsert({
+          organization_id: empDaily.organizationId,
+          employee_id: empDaily.employeeId,
+          department_id: empDaily.departmentId,
+          date: empDaily.date,
+          provider: empDaily.provider,
+          tool: empDaily.tool,
+          sessions: empDaily.sessions,
+          active_minutes: empDaily.activeMinutes,
+          idle_minutes: empDaily.idleMinutes,
+          last_activity_at: empDaily.lastActivityAt
+        });
+
+        if (error) {
+          throw new Error(`Database Error [employee_usage_daily.upsert]: ${error.message}`);
         }
       }
     }

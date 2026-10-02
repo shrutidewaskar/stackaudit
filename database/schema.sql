@@ -1,6 +1,6 @@
--- StackAudit Database Schema
+-- StackAudit Database Schema & Multi-Tenant Security Model
 
--- Audits table
+-- 1. Audits table (Public intake & authenticated history)
 CREATE TABLE IF NOT EXISTS public.audits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -13,11 +13,13 @@ CREATE TABLE IF NOT EXISTS public.audits (
   percentage_saved NUMERIC NOT NULL,
   optimization_score TEXT NOT NULL,
   summary TEXT NOT NULL,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_audits_created_at ON public.audits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audits_user_id ON public.audits(user_id);
+CREATE INDEX IF NOT EXISTS idx_audits_organization_id ON public.audits(organization_id);
 
 -- Audit Tools table
 CREATE TABLE IF NOT EXISTS public.audit_tools (
@@ -42,169 +44,14 @@ CREATE TABLE IF NOT EXISTS public.leads (
   company TEXT,
   role TEXT,
   team_size TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_leads_audit_id ON public.leads(audit_id);
 CREATE INDEX IF NOT EXISTS idx_leads_email ON public.leads(email);
 
--- Enable Row Level Security
-ALTER TABLE public.audits ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.audit_tools ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
-
--- Create policies for audits
-CREATE POLICY "Public read access to audits"
-  ON public.audits
-  FOR SELECT
-  USING (true);
-
-CREATE POLICY "Anyone can insert audits"
-  ON public.audits
-  FOR INSERT
-  WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
-
-CREATE POLICY "Users can delete their own audits"
-  ON public.audits
-  FOR DELETE
-  USING (auth.uid() = user_id);
-
--- Create policies for audit tools
-CREATE POLICY "Public read access to audit_tools"
-  ON public.audit_tools
-  FOR SELECT
-  USING (true);
-
-CREATE POLICY "Anyone can insert audit_tools"
-  ON public.audit_tools
-  FOR INSERT
-  WITH CHECK (true);
-
--- Create policies for leads
-CREATE POLICY "Anyone can insert leads"
-  ON public.leads
-  FOR INSERT
-  WITH CHECK (true);
-
-CREATE POLICY "Public read access to leads"
-  ON public.leads
-  FOR SELECT
-  USING (true);
-
--- Chat Sessions table
-CREATE TABLE IF NOT EXISTS public.chat_sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  audit_id UUID REFERENCES public.audits(id) ON DELETE CASCADE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  current_intent TEXT,
-  organization_id UUID,
-  title TEXT,
-  status TEXT DEFAULT 'active',
-  last_message_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-  provider TEXT DEFAULT 'mock',
-  model TEXT DEFAULT 'mock-model-v1'
-);
-
-CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON public.chat_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_chat_sessions_audit_id ON public.chat_sessions(audit_id);
-CREATE INDEX IF NOT EXISTS idx_chat_sessions_organization_id ON public.chat_sessions(organization_id);
-
--- Chat Messages table
-CREATE TABLE IF NOT EXISTS public.chat_messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
-  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-  content TEXT NOT NULL,
-  metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
-  token_count INTEGER DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON public.chat_messages(session_id);
-
--- Conversation Context table
-CREATE TABLE IF NOT EXISTS public.conversation_context (
-  session_id UUID PRIMARY KEY REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
-  company_size INTEGER,
-  budget NUMERIC,
-  tools JSONB DEFAULT '[]'::jsonb NOT NULL,
-  recommendations JSONB DEFAULT '[]'::jsonb NOT NULL,
-  optimization_score NUMERIC,
-  future_growth TEXT
-);
-
--- Conversation Memory table
-CREATE TABLE IF NOT EXISTS public.conversation_memory (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
-  summary TEXT,
-  entities JSONB DEFAULT '[]'::jsonb NOT NULL,
-  topics JSONB DEFAULT '[]'::jsonb NOT NULL,
-  important_decisions JSONB DEFAULT '[]'::jsonb NOT NULL,
-  last_updated TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_conversation_memory_session_id ON public.conversation_memory(session_id);
-
--- Organization Context table
-CREATE TABLE IF NOT EXISTS public.organization_context (
-  organization_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_name TEXT NOT NULL,
-  industry TEXT,
-  company_size INTEGER,
-  governance_score NUMERIC DEFAULT 100,
-  current_stack JSONB DEFAULT '[]'::jsonb NOT NULL,
-  connected_tools JSONB DEFAULT '[]'::jsonb NOT NULL,
-  known_preferences JSONB DEFAULT '{}'::jsonb NOT NULL,
-  last_updated TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- User Preferences table
-CREATE TABLE IF NOT EXISTS public.user_preferences (
-  user_id UUID PRIMARY KEY,
-  preferred_provider TEXT DEFAULT 'mock',
-  preferred_language TEXT DEFAULT 'en',
-  notification_preferences JSONB DEFAULT '{}'::jsonb NOT NULL,
-  conversation_style TEXT DEFAULT 'professional',
-  favorite_reports JSONB DEFAULT '[]'::jsonb NOT NULL
-);
-
--- Enable RLS
-ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.conversation_context ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.conversation_memory ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.organization_context ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
-
--- Policies for chat sessions
-CREATE POLICY "Public read access to chat_sessions" ON public.chat_sessions FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert chat_sessions" ON public.chat_sessions FOR INSERT WITH CHECK (true);
-
--- Policies for chat messages
-CREATE POLICY "Public read access to chat_messages" ON public.chat_messages FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert chat_messages" ON public.chat_messages FOR INSERT WITH CHECK (true);
-
--- Policies for conversation context
-CREATE POLICY "Public read access to conversation_context" ON public.conversation_context FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert conversation_context" ON public.conversation_context FOR INSERT WITH CHECK (true);
-
--- Policies for conversation memory
-CREATE POLICY "Public read access to conversation_memory" ON public.conversation_memory FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert conversation_memory" ON public.conversation_memory FOR INSERT WITH CHECK (true);
-
--- Policies for organization context
-CREATE POLICY "Public read access to organization_context" ON public.organization_context FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert organization_context" ON public.organization_context FOR INSERT WITH CHECK (true);
-
--- Policies for user preferences
-CREATE POLICY "Public read access to user_preferences" ON public.user_preferences FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert user_preferences" ON public.user_preferences FOR INSERT WITH CHECK (true);
-
-
--- Organizations
+-- 2. Organizations
 CREATE TABLE IF NOT EXISTS public.organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -226,6 +73,8 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
   PRIMARY KEY (organization_id, user_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_org_members_user_id ON public.organization_members(user_id);
+
 -- Departments
 CREATE TABLE IF NOT EXISTS public.departments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -235,6 +84,8 @@ CREATE TABLE IF NOT EXISTS public.departments (
   head TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_departments_organization_id ON public.departments(organization_id);
 
 -- Employees
 CREATE TABLE IF NOT EXISTS public.employees (
@@ -248,6 +99,8 @@ CREATE TABLE IF NOT EXISTS public.employees (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_employees_organization_id ON public.employees(organization_id);
+
 -- Workspaces
 CREATE TABLE IF NOT EXISTS public.workspaces (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -258,35 +111,9 @@ CREATE TABLE IF NOT EXISTS public.workspaces (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Update existing audits, leads, and chat sessions to reference organizations
-ALTER TABLE public.audits ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL;
-ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_workspaces_organization_id ON public.workspaces(organization_id);
 
--- Enable RLS for new tables
-ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.workspaces ENABLE ROW LEVEL SECURITY;
-
--- Policies for new tables
-CREATE POLICY "Public read access to organizations" ON public.organizations FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert organizations" ON public.organizations FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Public read access to organization_members" ON public.organization_members FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert organization_members" ON public.organization_members FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Public read access to departments" ON public.departments FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert departments" ON public.departments FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Public read access to employees" ON public.employees FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert employees" ON public.employees FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Public read access to workspaces" ON public.workspaces FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert workspaces" ON public.workspaces FOR INSERT WITH CHECK (true);
-
-
--- Persistent Raw Usage Events
+-- 3. Telemetry and Usage Events
 CREATE TABLE IF NOT EXISTS public.usage_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id TEXT UNIQUE NOT NULL,
@@ -309,7 +136,8 @@ CREATE TABLE IF NOT EXISTS public.usage_events (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Daily Usage Aggregations
+CREATE INDEX IF NOT EXISTS idx_usage_events_org ON public.usage_events(organization_id);
+
 CREATE TABLE IF NOT EXISTS public.daily_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -329,7 +157,8 @@ CREATE TABLE IF NOT EXISTS public.daily_usage (
   UNIQUE (organization_id, date, provider, tool, department_id)
 );
 
--- Employee Daily Aggregations
+CREATE INDEX IF NOT EXISTS idx_daily_usage_org ON public.daily_usage(organization_id, date);
+
 CREATE TABLE IF NOT EXISTS public.employee_usage_daily (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -346,7 +175,8 @@ CREATE TABLE IF NOT EXISTS public.employee_usage_daily (
   UNIQUE (organization_id, employee_id, date, provider, tool)
 );
 
--- Sync Telemetry Tracking Jobs
+CREATE INDEX IF NOT EXISTS idx_emp_usage_org ON public.employee_usage_daily(organization_id, employee_id);
+
 CREATE TABLE IF NOT EXISTS public.sync_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -363,27 +193,7 @@ CREATE TABLE IF NOT EXISTS public.sync_jobs (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Enable RLS
-ALTER TABLE public.usage_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.daily_usage ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.employee_usage_daily ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sync_jobs ENABLE ROW LEVEL SECURITY;
-
--- Policies (Scoping access to public for mock validation, with future org constraints)
-CREATE POLICY "Public read access to usage_events" ON public.usage_events FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert usage_events" ON public.usage_events FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Public read access to daily_usage" ON public.daily_usage FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert daily_usage" ON public.daily_usage FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Public read access to employee_usage_daily" ON public.employee_usage_daily FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert employee_usage_daily" ON public.employee_usage_daily FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Public read access to sync_jobs" ON public.sync_jobs FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert sync_jobs" ON public.sync_jobs FOR INSERT WITH CHECK (true);
-
-
--- Governance Snapshot History
+-- 4. Governance Snapshots and Reports
 CREATE TABLE IF NOT EXISTS public.governance_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -402,31 +212,6 @@ CREATE TABLE IF NOT EXISTS public.governance_snapshots (
   UNIQUE (organization_id, snapshot_date)
 );
 
-ALTER TABLE public.governance_snapshots ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Read access to governance_snapshots by organization members" 
-ON public.governance_snapshots 
-FOR SELECT 
-USING (
-  EXISTS (
-    SELECT 1 FROM public.organization_members
-    WHERE organization_members.organization_id = governance_snapshots.organization_id
-    AND organization_members.user_id = auth.uid()
-  )
-);
-
-CREATE POLICY "Insert access to governance_snapshots by organization members" 
-ON public.governance_snapshots 
-FOR INSERT 
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.organization_members
-    WHERE organization_members.organization_id = governance_snapshots.organization_id
-    AND organization_members.user_id = auth.uid()
-  )
-);
-
-
--- Governance Reports Schema
 CREATE TABLE IF NOT EXISTS public.governance_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -440,12 +225,227 @@ CREATE TABLE IF NOT EXISTS public.governance_reports (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 5. Chat and Intelligence Layer
+CREATE TABLE IF NOT EXISTS public.chat_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  audit_id UUID REFERENCES public.audits(id) ON DELETE CASCADE,
+  organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
+  title TEXT,
+  status TEXT DEFAULT 'active',
+  current_intent TEXT,
+  provider TEXT DEFAULT 'mock',
+  model TEXT DEFAULT 'mock-model-v1',
+  last_message_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_org ON public.chat_sessions(organization_id);
+
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+  content TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+  token_count INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.conversation_memory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+  summary TEXT,
+  entities JSONB DEFAULT '[]'::jsonb NOT NULL,
+  topics JSONB DEFAULT '[]'::jsonb NOT NULL,
+  important_decisions JSONB DEFAULT '[]'::jsonb NOT NULL,
+  last_updated TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- -------------------------------------------------------------
+-- ROW LEVEL SECURITY (RLS) POLICIES
+-- Multi-Tenant Isolation via Organization Membership
+-- -------------------------------------------------------------
+
+-- Enable RLS across all tables
+ALTER TABLE public.audits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_tools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workspaces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.usage_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.daily_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.employee_usage_daily ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sync_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.governance_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.governance_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversation_memory ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Read access to governance_reports by organization members" 
-ON public.governance_reports 
-FOR SELECT 
-USING (
+-- 1. Public / Audit Policies (Intentionally supported public intake)
+CREATE POLICY "Public can insert audits" ON public.audits FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can read own audits or organization audits" ON public.audits FOR SELECT USING (
+  user_id = auth.uid() OR
+  (organization_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = audits.organization_id
+    AND organization_members.user_id = auth.uid()
+  ))
+);
+
+CREATE POLICY "Public can insert audit_tools" ON public.audit_tools FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public can read audit_tools" ON public.audit_tools FOR SELECT USING (true);
+
+CREATE POLICY "Public can insert leads" ON public.leads FOR INSERT WITH CHECK (true);
+CREATE POLICY "Organization members can read leads" ON public.leads FOR SELECT USING (
+  organization_id IS NULL OR EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = leads.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+
+-- 2. Organizations & Members Policies
+CREATE POLICY "Members can view their organizations" ON public.organizations FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = organizations.id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Members can view membership list" ON public.organization_members FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members AS m
+    WHERE m.organization_id = organization_members.organization_id
+    AND m.user_id = auth.uid()
+  )
+);
+
+-- 3. Tenant-Scoped Enterprise Tables
+CREATE POLICY "Org members can read departments" ON public.departments FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = departments.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+CREATE POLICY "Org admins can manage departments" ON public.departments FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = departments.organization_id
+    AND organization_members.user_id = auth.uid()
+    AND organization_members.role IN ('owner', 'admin', 'manager')
+  )
+);
+
+CREATE POLICY "Org members can read employees" ON public.employees FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = employees.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+CREATE POLICY "Org admins can manage employees" ON public.employees FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = employees.organization_id
+    AND organization_members.user_id = auth.uid()
+    AND organization_members.role IN ('owner', 'admin', 'manager')
+  )
+);
+
+CREATE POLICY "Org members can read workspaces" ON public.workspaces FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = workspaces.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+CREATE POLICY "Org admins can manage workspaces" ON public.workspaces FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = workspaces.organization_id
+    AND organization_members.user_id = auth.uid()
+    AND organization_members.role IN ('owner', 'admin', 'manager')
+  )
+);
+
+-- 4. Usage, Telemetry & Governance
+CREATE POLICY "Org members can read usage_events" ON public.usage_events FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = usage_events.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+CREATE POLICY "Org members can insert usage_events" ON public.usage_events FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = usage_events.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Org members can read daily_usage" ON public.daily_usage FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = daily_usage.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+CREATE POLICY "Org members can manage daily_usage" ON public.daily_usage FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = daily_usage.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Org members can read employee_usage_daily" ON public.employee_usage_daily FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = employee_usage_daily.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+CREATE POLICY "Org members can manage employee_usage_daily" ON public.employee_usage_daily FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = employee_usage_daily.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Org members can read sync_jobs" ON public.sync_jobs FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = sync_jobs.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+CREATE POLICY "Org members can manage sync_jobs" ON public.sync_jobs FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = sync_jobs.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Org members can read governance_snapshots" ON public.governance_snapshots FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = governance_snapshots.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Org members can read governance_reports" ON public.governance_reports FOR SELECT USING (
   EXISTS (
     SELECT 1 FROM public.organization_members
     WHERE organization_members.organization_id = governance_reports.organization_id
@@ -453,17 +453,28 @@ USING (
   )
 );
 
-CREATE POLICY "Insert access to governance_reports by organization members" 
-ON public.governance_reports 
-FOR INSERT 
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.organization_members
-    WHERE organization_members.organization_id = governance_reports.organization_id
-    AND organization_members.user_id = auth.uid()
+-- 5. Chat & Memory
+CREATE POLICY "Users can access own chat sessions in their organization" ON public.chat_sessions FOR ALL USING (
+  user_id = auth.uid() OR (
+    organization_id IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.organization_members
+      WHERE organization_members.organization_id = chat_sessions.organization_id
+      AND organization_members.user_id = auth.uid()
+    )
   )
 );
 
-
-
-
+CREATE POLICY "Users can access messages for accessible sessions" ON public.chat_messages FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.chat_sessions
+    WHERE chat_sessions.id = chat_messages.session_id
+    AND (
+      chat_sessions.user_id = auth.uid() OR
+      EXISTS (
+        SELECT 1 FROM public.organization_members
+        WHERE organization_members.organization_id = chat_sessions.organization_id
+        AND organization_members.user_id = auth.uid()
+      )
+    )
+  )
+);

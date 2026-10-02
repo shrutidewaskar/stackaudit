@@ -3,15 +3,9 @@ import { IngestionResult } from "./types";
 import { PrivacyService } from "./privacyService";
 import { NormalizationService } from "./normalizationService";
 import { DeduplicationService } from "./deduplicationService";
-import { supabase } from "@/lib/supabase";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
-
-// Fallback in-memory database storage for persistent events
+// In-memory database storage for isolated dev/test mode
 export const mockUsageEventsDB: UsageEvent[] = [];
 
 export class IngestionService {
@@ -83,6 +77,10 @@ export class IngestionService {
         validEventsToSave.push(normalized);
         result.accepted++;
       } catch (err) {
+        // If the error is a Database or Configuration error, fail loudly in production
+        if (err instanceof Error && (err.message.includes("Database") || err.message.includes("Configuration"))) {
+          throw err;
+        }
         result.rejected++;
         result.errors.push(`Event ${ev.eventId} failed: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
@@ -90,35 +88,39 @@ export class IngestionService {
 
     // Persist batch to DB
     if (validEventsToSave.length > 0) {
-      if (!isSupabaseConfigured) {
+      if (isDevMockMode()) {
         mockUsageEventsDB.push(...validEventsToSave);
       } else {
-        try {
-          const dbRows = validEventsToSave.map((e) => ({
-            event_id: e.eventId,
-            organization_id: e.organizationId,
-            employee_id: e.employeeId,
-            workspace_id: e.workspaceId,
-            connector_id: e.connectorId,
-            provider: e.provider,
-            tool: e.tool,
-            source: e.source,
-            domain: e.domain,
-            session_start: e.sessionStart,
-            session_end: e.sessionEnd,
-            active_duration: e.activeDuration,
-            idle_duration: e.idleDuration,
-            tab_visibility: e.tabVisibility,
-            device: e.device,
-            browser: e.browser,
-            metadata: e.metadata
-          }));
-          const { error } = await supabase.from("usage_events").insert(dbRows);
-          if (error) throw error;
-        } catch (err) {
-          // Fallback on error
-          mockUsageEventsDB.push(...validEventsToSave);
-          result.errors.push(`Database persistence error, saved to fallback cache: ${err instanceof Error ? err.message : "Unknown error"}`);
+        assertSupabaseConfigured();
+        const dbRows = validEventsToSave.map((e) => ({
+          event_id: e.eventId,
+          organization_id: e.organizationId,
+          employee_id: e.employeeId,
+          workspace_id: e.workspaceId,
+          connector_id: e.connectorId,
+          provider: e.provider,
+          tool: e.tool,
+          source: e.source,
+          domain: e.domain,
+          session_start: e.sessionStart,
+          session_end: e.sessionEnd,
+          active_duration: e.activeDuration,
+          idle_duration: e.idleDuration,
+          tab_visibility: e.tabVisibility,
+          device: e.device,
+          browser: e.browser,
+          metadata: e.metadata
+        }));
+
+        const { error } = await supabase.from("usage_events").insert(dbRows);
+        if (error) {
+          // If unique constraint violation occurred (e.g. concurrent race condition), identify duplicate
+          if (error.code === "23505" || error.message.includes("unique") || error.message.includes("duplicate key")) {
+            result.duplicates += validEventsToSave.length;
+            result.accepted -= validEventsToSave.length;
+          } else {
+            throw new Error(`Database Error [usage_events.insert]: ${error.message}`);
+          }
         }
       }
     }
@@ -126,3 +128,4 @@ export class IngestionService {
     return result;
   }
 }
+

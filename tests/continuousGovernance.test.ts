@@ -5,6 +5,8 @@ import { ChangeDetectionService } from "../lib/governance/continuous/changeDetec
 import { GovernanceEngine } from "../lib/governance/engine";
 
 async function runContinuousTests() {
+  process.env.DEV_MOCK_MODE = "true";
+  process.env.NODE_ENV = "test";
   console.log("=== Running Continuous Governance & Reporting Engine Tests ===");
   const orgId = "novatech-labs-uuid";
 

@@ -1,11 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 import { Employee } from "./types";
-
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
 
 export const mockEmployees = new Map<string, Employee>();
 
@@ -70,69 +64,62 @@ export class EmployeeService {
       created_at: new Date().toISOString()
     };
 
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       mockEmployees.set(fullEmp.id, fullEmp);
       return fullEmp;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .insert([fullEmp])
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    } catch {
-      mockEmployees.set(fullEmp.id, fullEmp);
-      return fullEmp;
-    }
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("employees")
+      .insert([fullEmp])
+      .select()
+      .single();
+
+    if (error) throw new Error(`Database Error [employees.create]: ${error.message}`);
+    return data;
   }
 
   async get(id: string): Promise<Employee | null> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       return mockEmployees.get(id) || null;
     }
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error) throw error;
-      return data;
-    } catch {
-      return mockEmployees.get(id) || null;
-    }
+
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) throw new Error(`Database Error [employees.get]: ${error.message}`);
+    return data || null;
   }
 
   async list(orgId: string): Promise<Employee[]> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       return Array.from(mockEmployees.values()).filter((e) => e.organization_id === orgId);
     }
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .eq("organization_id", orgId);
-      if (error) throw error;
-      return data || [];
-    } catch {
-      return Array.from(mockEmployees.values()).filter((e) => e.organization_id === orgId);
-    }
+
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("organization_id", orgId);
+
+    if (error) throw new Error(`Database Error [employees.list]: ${error.message}`);
+    return data || [];
   }
 
   async delete(id: string): Promise<boolean> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       return mockEmployees.delete(id);
     }
-    try {
-      const { error } = await supabase.from("employees").delete().eq("id", id);
-      if (error) throw error;
-      return true;
-    } catch {
-      return mockEmployees.delete(id);
-    }
+
+    assertSupabaseConfigured();
+    const { error } = await supabase.from("employees").delete().eq("id", id);
+    if (error) throw new Error(`Database Error [employees.delete]: ${error.message}`);
+    return true;
   }
 }
 

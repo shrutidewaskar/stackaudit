@@ -1,11 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 import { Workspace } from "./types";
-
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
 
 export const mockWorkspaces = new Map<string, Workspace>();
 
@@ -58,69 +52,62 @@ export class WorkspaceService {
       created_at: new Date().toISOString()
     };
 
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       mockWorkspaces.set(ws.id, ws);
       return ws;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from("workspaces")
-        .insert([ws])
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    } catch {
-      mockWorkspaces.set(ws.id, ws);
-      return ws;
-    }
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("workspaces")
+      .insert([ws])
+      .select()
+      .single();
+
+    if (error) throw new Error(`Database Error [workspaces.create]: ${error.message}`);
+    return data;
   }
 
   async get(id: string): Promise<Workspace | null> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       return mockWorkspaces.get(id) || null;
     }
-    try {
-      const { data, error } = await supabase
-        .from("workspaces")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error) throw error;
-      return data;
-    } catch {
-      return mockWorkspaces.get(id) || null;
-    }
+
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("workspaces")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) throw new Error(`Database Error [workspaces.get]: ${error.message}`);
+    return data || null;
   }
 
   async list(orgId: string): Promise<Workspace[]> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       return Array.from(mockWorkspaces.values()).filter((w) => w.organization_id === orgId);
     }
-    try {
-      const { data, error } = await supabase
-        .from("workspaces")
-        .select("*")
-        .eq("organization_id", orgId);
-      if (error) throw error;
-      return data || [];
-    } catch {
-      return Array.from(mockWorkspaces.values()).filter((w) => w.organization_id === orgId);
-    }
+
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("workspaces")
+      .select("*")
+      .eq("organization_id", orgId);
+
+    if (error) throw new Error(`Database Error [workspaces.list]: ${error.message}`);
+    return data || [];
   }
 
   async delete(id: string): Promise<boolean> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       return mockWorkspaces.delete(id);
     }
-    try {
-      const { error } = await supabase.from("workspaces").delete().eq("id", id);
-      if (error) throw error;
-      return true;
-    } catch {
-      return mockWorkspaces.delete(id);
-    }
+
+    assertSupabaseConfigured();
+    const { error } = await supabase.from("workspaces").delete().eq("id", id);
+    if (error) throw new Error(`Database Error [workspaces.delete]: ${error.message}`);
+    return true;
   }
 }
 

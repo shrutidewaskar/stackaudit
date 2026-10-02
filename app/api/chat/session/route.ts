@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SessionManager } from "@/lib/ai/memory/sessionManager";
+import { requireOrganizationMember } from "@/lib/auth/serverAuth";
 
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireOrganizationMember(request);
+    if ("response" in authResult) return authResult.response;
+
     const body = await request.json();
-    const { userId, orgId, title, provider, model, auditId } = body;
+    const { title, provider, model, auditId } = body;
 
     const session = await SessionManager.createSession({
-      userId: userId || null,
-      orgId: orgId || null,
+      userId: authResult.auth.user.id,
+      orgId: authResult.auth.organizationId,
       title: title || "New Conversation",
       provider: provider || "mock",
       model: model || "mock-model-v1",

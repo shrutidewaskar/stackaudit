@@ -1,14 +1,6 @@
 import { GovernanceReport, WeeklyDigestContent } from "./types";
 import { GovernanceEngine } from "../engine";
-import { ChangeDetectionService } from "./changeDetector";
-import { localSnapshotsCache } from "./evaluationService";
-import { supabase } from "@/lib/supabase";
-
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 
 export const localReportsCache: GovernanceReport[] = [];
 
@@ -81,23 +73,23 @@ export class DigestService {
     };
 
     // Save report
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       localReportsCache.push(report);
     } else {
-      try {
-        const { error } = await supabase.from("governance_reports").insert({
-          id: report.id,
-          organization_id: report.organizationId,
-          report_type: report.reportType,
-          period_start: report.periodStart,
-          period_end: report.periodEnd,
-          status: report.status,
-          content: report.content,
-          metadata: report.metadata
-        });
-        if (error) throw error;
-      } catch {
-        localReportsCache.push(report);
+      assertSupabaseConfigured();
+      const { error } = await supabase.from("governance_reports").insert({
+        id: report.id,
+        organization_id: report.organizationId,
+        report_type: report.reportType,
+        period_start: report.periodStart,
+        period_end: report.periodEnd,
+        status: report.status,
+        content: report.content,
+        metadata: report.metadata
+      });
+
+      if (error) {
+        throw new Error(`Database Error [governance_reports.insert]: ${error.message}`);
       }
     }
 

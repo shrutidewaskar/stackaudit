@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { organizationService } from "@/services/enterprise/OrganizationService";
+import { requireOrganizationMember, requireRole } from "@/lib/auth/serverAuth";
 
 export async function GET(
   request: NextRequest,
@@ -7,6 +8,9 @@ export async function GET(
 ) {
   try {
     const { id } = await props.params;
+    const authResult = await requireOrganizationMember(request, id);
+    if ("response" in authResult) return authResult.response;
+
     const org = await organizationService.get(id);
     if (!org) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
@@ -24,6 +28,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await props.params;
+    const authResult = await requireOrganizationMember(request, id, "admin");
+    if ("response" in authResult) return authResult.response;
+
     const body = await request.json();
     const updated = await organizationService.update(id, body);
     return NextResponse.json(updated);
@@ -39,6 +46,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await props.params;
+    const authResult = await requireOrganizationMember(request, id, "owner");
+    if ("response" in authResult) return authResult.response;
+
     const success = await organizationService.delete(id);
     if (!success) {
       return NextResponse.json({ error: "Failed to delete organization" }, { status: 500 });

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SessionManager } from "@/lib/ai/memory/sessionManager";
+import { requireOrganizationMember } from "@/lib/auth/serverAuth";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = request.nextUrl;
-    const userId = searchParams.get("userId");
-    const orgId = searchParams.get("orgId");
+    const authResult = await requireOrganizationMember(request);
+    if ("response" in authResult) return authResult.response;
 
-    const sessions = await SessionManager.listSessions(userId, orgId);
+    const sessions = await SessionManager.listSessions(
+      authResult.auth.user.id,
+      authResult.auth.organizationId
+    );
     return NextResponse.json(sessions);
   } catch (error) {
     console.error("API error listing history:", error);

@@ -1,11 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, isDevMockMode, assertSupabaseConfigured } from "@/lib/supabase";
 import { OrganizationMember } from "./types";
-
-const isSupabaseConfigured =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://placeholder.supabase.co" &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== "placeholder-key";
 
 export const mockMembers = new Map<string, OrganizationMember>();
 
@@ -56,56 +50,52 @@ export class MembershipService {
   }
 
   async addMember(member: OrganizationMember): Promise<OrganizationMember> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       mockMembers.set(`${member.organization_id}-${member.user_id}`, member);
       return member;
     }
-    try {
-      const { data, error } = await supabase
-        .from("organization_members")
-        .insert([member])
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    } catch {
-      mockMembers.set(`${member.organization_id}-${member.user_id}`, member);
-      return member;
-    }
+
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("organization_members")
+      .insert([member])
+      .select()
+      .single();
+
+    if (error) throw new Error(`Database Error [organization_members.add]: ${error.message}`);
+    return data;
   }
 
   async getMember(orgId: string, userId: string): Promise<OrganizationMember | null> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       return mockMembers.get(`${orgId}-${userId}`) || null;
     }
-    try {
-      const { data, error } = await supabase
-        .from("organization_members")
-        .select("*")
-        .eq("organization_id", orgId)
-        .eq("user_id", userId)
-        .single();
-      if (error) throw error;
-      return data;
-    } catch {
-      return mockMembers.get(`${orgId}-${userId}`) || null;
-    }
+
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("organization_members")
+      .select("*")
+      .eq("organization_id", orgId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) throw new Error(`Database Error [organization_members.get]: ${error.message}`);
+    return data || null;
   }
 
   async listMembers(orgId: string): Promise<OrganizationMember[]> {
-    if (!isSupabaseConfigured) {
+    if (isDevMockMode()) {
       return Array.from(mockMembers.values()).filter((m) => m.organization_id === orgId);
     }
-    try {
-      const { data, error } = await supabase
-        .from("organization_members")
-        .select("*")
-        .eq("organization_id", orgId);
-      if (error) throw error;
-      return data || [];
-    } catch {
-      return Array.from(mockMembers.values()).filter((m) => m.organization_id === orgId);
-    }
+
+    assertSupabaseConfigured();
+    const { data, error } = await supabase
+      .from("organization_members")
+      .select("*")
+      .eq("organization_id", orgId);
+
+    if (error) throw new Error(`Database Error [organization_members.list]: ${error.message}`);
+    return data || [];
   }
 
   async hasPermission(orgId: string, userId: string, action: keyof RolePermissions): Promise<boolean> {

@@ -5,6 +5,8 @@ import { DeduplicationService } from "../lib/sync/deduplicationService";
 import { UsageEvent } from "../lib/usage/types/types";
 
 async function runTests() {
+  process.env.DEV_MOCK_MODE = "true";
+  process.env.NODE_ENV = "test";
   console.log("=== Running Synchronization & Governance Data Engine Tests ===");
   const orgId = "novatech-labs-uuid";
 

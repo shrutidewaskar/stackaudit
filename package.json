@@ -16,6 +16,10 @@
     "test:extension": "npx tsx tests/extension.test.ts",
     "test:gemini": "npx tsx tests/geminiProvider.test.ts",
     "test:tools": "npx tsx tests/aiTools.test.ts",
+    "test:security": "npx tsx tests/authTenantSecurity.test.ts",
+    "test:persistence": "npx tsx tests/persistenceSemantics.test.ts",
+    "test:telemetry-persistence": "npx tsx tests/telemetryPersistence.test.ts",
+    "test": "npx tsx tests/authTenantSecurity.test.ts && npx tsx tests/governance.test.ts && npx tsx tests/sync.test.ts && npx tsx tests/continuousGovernance.test.ts && npx tsx tests/aiContext.test.ts && npx tsx tests/aiTools.test.ts && npx tsx tests/geminiProvider.test.ts && npx tsx tests/extension.test.ts && npx tsx tests/persistenceSemantics.test.ts && npx tsx tests/telemetryPersistence.test.ts",
     "governance:daily": "npx tsx scripts/runDailyGovernance.ts"
   },
   "dependencies": {
