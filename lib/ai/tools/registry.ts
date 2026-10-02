@@ -7,7 +7,6 @@ class ToolRegistry {
     if (this.tools.has(tool.name)) {
       console.warn(`[ToolRegistry] Overwriting already registered tool: ${tool.name}`);
     }
-    this.tools.set(tool.name), tool;
     this.tools.set(tool.name, tool);
   }
 
