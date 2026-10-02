@@ -1,8 +1,24 @@
 import { AIProvider, AIContext, AIResponse } from "./types";
+import { ToolGateway } from "../tools/gateway";
+import "../tools"; // Ensure tools register on load
 
 export class MockAIProvider implements AIProvider {
   public async generate(context: AIContext, prompt: string): Promise<AIResponse> {
     console.log(`[MockAIProvider] Generating analyst response for intent: ${context.intent}`);
+
+    // Bounded tool calling loop simulation through ToolGateway
+    const toolContext = {
+      orgId: context.organization.id,
+      userId: context.user?.id || "user-1",
+      userRole: context.user?.role || "admin",
+      conversationId: "conv-mock-1",
+      callCount: 0
+    };
+
+    // Execute tools through central Gateway to ensure policies / scopes execute fully
+    const scoreResult = await ToolGateway.execute("get_governance_score", { organizationId: context.organization.id }, toolContext);
+    const trendsResult = await ToolGateway.execute("get_governance_trends", { organizationId: context.organization.id }, { ...toolContext, callCount: 1 });
+    const findingsResult = await ToolGateway.execute("get_governance_findings", { organizationId: context.organization.id }, { ...toolContext, callCount: 2 });
 
     let answer = "I have reviewed the StackAudit telemetry logs. ";
     

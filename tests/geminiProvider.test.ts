@@ -18,12 +18,12 @@ async function runGeminiProviderTests() {
     intent: "GOVERNANCE_EXPLANATION",
     governanceScore: 76,
     governanceDimensions: {
-      visibility: { score: 80, status: "GOOD" },
-      utilization: { score: 72, status: "NEEDS_IMPROVEMENT" },
-      adoption: { score: 85, status: "GOOD" },
-      redundancy: { score: 68, status: "NEEDS_IMPROVEMENT" },
-      dataCompleteness: { score: 90, status: "GOOD" }
-    },
+      visibility: { score: 80 },
+      utilization: { score: 72 },
+      adoption: { score: 85 },
+      redundancy: { score: 68 },
+      dataCompleteness: { score: 90 }
+    } as any,
     activeFindings: [],
     actionCandidates: [],
     recentReports: [],

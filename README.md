@@ -195,6 +195,17 @@ Configure the following environment variables to activate the integration:
 * **Traceable Citations**: Output responses map exactly to the `AIResponse` structure, tracing metrics and findings directly back to original context resource IDs.
 
 
+## Governed Tool Calling & Decision Intelligence
+
+StackAudit implements an agentic tool-calling architecture. The AI receives permissions to invoke read-only backend API tools, governed by a central authorization gateway.
+
+### 1. Tool Registry & Gateway
+* **Registry**: Manages registered read-only tools (`get_governance_score`, `get_governance_findings`, `get_governance_trends`, `get_usage_summary`, `get_department_usage`, `get_tool_usage`, `get_latest_report`, `get_departments`, `get_workspaces`).
+* **Gateway**: Enforces multi-tenant isolation, validates input schemas, checks user permissions (e.g. `VIEW_GOVERNANCE`, `VIEW_USAGE`), and keeps a bounded tool call limit (maximum 5 calls per request).
+* **Audit Logging**: Keeps an audit log trace of request metadata (latency, status, errors) without recording sensitive arguments or raw data.
+
+
+
 
 
 

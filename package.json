@@ -15,6 +15,7 @@
     "test:context": "npx tsx tests/aiContext.test.ts",
     "test:extension": "npx tsx tests/extension.test.ts",
     "test:gemini": "npx tsx tests/geminiProvider.test.ts",
+    "test:tools": "npx tsx tests/aiTools.test.ts",
     "governance:daily": "npx tsx scripts/runDailyGovernance.ts"
   },
   "dependencies": {
