@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>StackAudit Options</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #000000;
+      color: #ffffff;
+      padding: 40px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 900;
+      border-bottom: 1px solid #27272a;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: bold;
+      color: #71717a;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    input[type="text"] {
+      width: 100%;
+      background-color: #18181b;
+      border: 1px solid #27272a;
+      color: #ffffff;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #84cc16;
+    }
+    .btn {
+      background-color: #84cc16;
+      color: #000000;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .btn:hover {
+      background-color: #a3e635;
+    }
+    .status-msg {
+      margin-top: 12px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .status-msg.success {
+      color: #84cc16;
+    }
+    .status-msg.error {
+      color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <h1>StackAudit Enrollment</h1>
+
+  <div class="form-group">
+    <label for="token">Pairing Enrollment Token</label>
+    <input type="text" id="token" placeholder="Enter organization token...">
+  </div>
+
+  <button id="save-btn" class="btn">Pair Extension</button>
+  <div id="status" class="status-msg"></div>
+
+  <script src="options.js"></script>
+</body>
+</html>

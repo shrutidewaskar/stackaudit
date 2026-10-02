@@ -10,6 +10,10 @@ export class MockProvider extends BaseAIProvider {
     return true;
   }
 
+  validateConfig(config: any): boolean {
+    return true;
+  }
+
   async generate(prompt: string, schema?: string, options?: any): Promise<AIResponse> {
     let responseText = "";
 
@@ -53,7 +57,21 @@ export class MockProvider extends BaseAIProvider {
         responseText = "This is a generic mock response from StackAudit Sprint 0 Foundation.";
     }
 
-    return { text: responseText };
+    return {
+      message: responseText,
+      citations: ["StackAudit Catalogue v1.0", "Internal Audit Engine v1.0"],
+      confidence: 0.98,
+      tokens: {
+        prompt: 120,
+        completion: 80,
+        total: 200
+      },
+      metadata: {
+        provider: "mock",
+        model: options?.model || "mock-model-v1",
+        schema: schema || "None"
+      }
+    };
   }
 
   async stream(prompt: string, options?: any): Promise<ReadableStream<AIStreamChunk>> {

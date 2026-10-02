@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 240px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #09090b;
+      color: #ffffff;
+      margin: 0;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #27272a;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #ffffff;
+    }
+    .status-badge {
+      font-size: 8px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 6px;
+      border-radius: 9999px;
+      background-color: rgba(132, 204, 22, 0.1);
+      color: #84cc16;
+      border: 1px solid rgba(132, 204, 22, 0.2);
+    }
+    .status-badge.paused {
+      background-color: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .info-card {
+      background-color: rgba(39, 39, 42, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 10px;
+      margin-bottom: 12px;
+      font-size: 10px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+    .label {
+      color: #71717a;
+      font-weight: bold;
+    }
+    .value {
+      font-weight: bold;
+      color: #e4e4e7;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      background-color: #84cc16;
+      color: #000000;
+      border: none;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      text-align: center;
+      transition: background-color 0.15s ease;
+    }
+    .btn:hover {
+      background-color: #a3e635;
+    }
+    .btn.pause {
+      background-color: #27272a;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .btn.pause:hover {
+      background-color: #3f3f46;
+    }
+    .footer {
+      font-size: 8px;
+      color: #3f3f46;
+      text-align: center;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="title">StackAudit</span>
+    <span id="status-badge" class="status-badge">Monitoring</span>
+  </div>
+
+  <div class="info-card">
+    <div class="info-row">
+      <span class="label">Organization:</span>
+      <span id="org-name" class="value">NovaTech Labs</span>
+    </div>
+    <div class="info-row">
+      <span class="label">Last Sync:</span>
+      <span id="last-sync" class="value">Just now</span>
+    </div>
+    <div class="info-row">
+      <span class="label">Telemetry:</span>
+      <span class="value">Metadata only</span>
+    </div>
+  </div>
+
+  <button id="toggle-btn" class="btn">Pause Monitoring</button>
+
+  <div class="footer">
+    Privacy Secured • Prompts are NEVER logged
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

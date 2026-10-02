@@ -7,5 +7,7 @@ export abstract class BaseAIProvider implements AIProvider {
   
   abstract health(): Promise<boolean>;
   
+  abstract validateConfig(config: any): boolean;
+  
   abstract name(): string;
 }

@@ -1,17 +1,26 @@
 export interface AIResponse {
-  text: string;
-  raw?: any;
+  message: string;
+  citations: string[];
+  confidence: number;
+  tokens: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+  metadata: Record<string, any>;
 }
 
 export interface AIStreamChunk {
   text: string;
   done: boolean;
+  tokens?: number;
 }
 
 export interface AIProvider {
   generate(prompt: string, schema?: string, options?: any): Promise<AIResponse>;
   stream(prompt: string, options?: any): Promise<ReadableStream<AIStreamChunk>>;
   health(): Promise<boolean>;
+  validateConfig(config: any): boolean;
   name(): string;
 }
 
@@ -30,3 +39,4 @@ export interface AgentConfig {
   schema: string;
   defaultModel: string;
 }
+

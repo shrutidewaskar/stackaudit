@@ -1,6 +1,7 @@
-import { aiConfig } from "@/config/ai";
-import { MockProvider } from "./providers/mock";
-import { getAgent } from "./registry";
+import { providerRegistry } from "./registry/providerRegistry";
+import { promptRegistry } from "./registry/promptRegistry";
+import { AIResponse } from "./types";
+import { ContextBuilder, ContextInput } from "./context/contextBuilder";
 import { validateAuditSummary } from "./schemas/audit";
 import { validateExecutiveReport } from "./schemas/report";
 import { validateChatResponse } from "./schemas/chat";
@@ -8,11 +9,6 @@ import { validateOptimizationAdvice } from "./schemas/optimization";
 import { validateProcurementAdvice } from "./schemas/procurement";
 
 export class AIOrchestrator {
-  private getProvider() {
-    // Sprint 0 defaults to MockProvider, in the future switch via aiConfig.provider
-    return new MockProvider();
-  }
-
   private validateResponse(schema: string, data: any): boolean {
     try {
       switch (schema) {
@@ -69,40 +65,70 @@ export class AIOrchestrator {
     }
   }
 
-  async runAgent(agentId: string, inputPayload: any): Promise<any> {
-    const agent = getAgent(agentId);
-    if (!agent) {
-      throw new Error(`Agent with ID "${agentId}" not found in registry.`);
+  async runAgent(agentId: string, inputPayload: any): Promise<AIResponse> {
+    // 1. Resolve prompt key based on agent ID
+    let promptKey = "conversation";
+    let schema = "ChatResponse";
+
+    if (agentId === "audit-analyst") {
+      promptKey = "executive_summary";
+      schema = "AuditSummary";
+    } else if (agentId === "optimization-advisor") {
+      promptKey = "recommendation_explanation";
+      schema = "OptimizationAdvice";
+    } else if (agentId === "executive-writer") {
+      promptKey = "monthly_report";
+      schema = "ExecutiveReport";
+    } else if (agentId === "marketplace-expert" || agentId === "procurement-advisor") {
+      promptKey = "procurement_advisor";
+      schema = "MarketplaceAnswer";
     }
 
-    // 1. Build context
-    const cleanContext = agent.contextBuilder(inputPayload);
+    const promptConfig = promptRegistry.getPrompt(promptKey);
 
-    // 2. Build prompt
-    const fullPrompt = `${agent.prompt.systemPrompt}\n\nContext:\n${cleanContext}\n\nPlease respond with a valid JSON structure matching the contract ${agent.schema}.`;
+    // 2. Build structured context using ContextBuilder
+    const contextInput: ContextInput = {
+      audit: inputPayload.audit || (inputPayload.tools ? inputPayload : undefined),
+      organization: inputPayload.organization || (inputPayload.teamSize ? { teamSize: inputPayload.teamSize, useCase: inputPayload.useCase } : undefined),
+      history: inputPayload.history,
+      recommendations: inputPayload.recommendations
+    };
+    
+    const contextPayload = ContextBuilder.build(contextInput);
 
-    // 3. Invoke provider
-    const provider = this.getProvider();
-    const response = await provider.generate(fullPrompt, agent.schema, {
-      model: aiConfig.defaultModel,
-      temperature: aiConfig.temperature,
-      maxTokens: aiConfig.maxTokens
-    });
+    // 3. Assemble full prompt
+    const fullPrompt = `${promptConfig.systemPrompt}\n\nContext:\n${contextPayload.formattedContextString}\n\nPlease respond with a valid JSON structure matching the contract ${schema}.`;
 
-    // 4. Parse & Validate output
+    // 4. Invoke selected provider dynamically
+    const provider = providerRegistry.getProvider();
+    const response = await provider.generate(fullPrompt, schema);
+
+    // 5. Parse & Validate output
     try {
-      const parsedData = JSON.parse(response.text);
-      const isValid = this.validateResponse(agent.schema, parsedData);
+      const parsedData = JSON.parse(response.message);
+      const isValid = this.validateResponse(schema, parsedData);
 
       if (isValid) {
-        return parsedData;
+        return response;
       } else {
         console.warn(`AI Orchestrator: Output validation failed for agent "${agentId}". Returning fallback.`);
-        return this.getFallbackResponse(agent.schema);
+        const fallbackMsg = JSON.stringify(this.getFallbackResponse(schema));
+        return {
+          ...response,
+          message: fallbackMsg,
+          confidence: 0.5,
+          metadata: { ...response.metadata, validationFailed: true, fallback: true }
+        };
       }
     } catch (err) {
       console.warn(`AI Orchestrator: Failed to parse provider response as JSON. Error: ${err}. Returning fallback.`);
-      return this.getFallbackResponse(agent.schema);
+      const fallbackMsg = JSON.stringify(this.getFallbackResponse(schema));
+      return {
+        ...response,
+        message: fallbackMsg,
+        confidence: 0.5,
+        metadata: { ...response.metadata, parseError: true, fallback: true }
+      };
     }
   }
 }

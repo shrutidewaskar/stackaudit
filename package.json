@@ -6,9 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:daily": "npx tsx scripts/runSync.ts",
+    "seed:telemetry": "npx tsx scripts/seedTelemetry.ts",
+    "test:sync": "npx tsx tests/sync.test.ts",
+    "test:governance": "npx tsx tests/governance.test.ts",
+    "test:continuous": "npx tsx tests/continuousGovernance.test.ts",
+    "test:context": "npx tsx tests/aiContext.test.ts",
+    "test:extension": "npx tsx tests/extension.test.ts",
+    "test:gemini": "npx tsx tests/geminiProvider.test.ts",
+    "governance:daily": "npx tsx scripts/runDailyGovernance.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.16.0",
     "@supabase/supabase-js": "^2.110.0",
     "anthropic": "^0.0.0",
     "class-variance-authority": "^0.7.1",
