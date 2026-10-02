@@ -1,3 +1,5 @@
+// StackAudit Extension Popup UI Handler
+
 document.addEventListener("DOMContentLoaded", () => {
   const statusBadge = document.getElementById("status-badge");
   const toggleBtn = document.getElementById("toggle-btn");
@@ -5,10 +7,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Load active extension state settings
   chrome.storage.local.get(
-    { monitoringEnabled: true, lastSyncTime: "Never" },
+    { 
+      monitoringEnabled: true, 
+      lastSyncTime: "Never",
+      lastSyncStatus: "IDLE",
+      pairingToken: null 
+    },
     (data) => {
-      updateUI(data.monitoringEnabled);
-      lastSyncSpan.textContent = data.lastSyncTime === "Never" ? "Never" : "Today " + new Date(data.lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      updateUI(data.monitoringEnabled, data.pairingToken, data.lastSyncStatus);
+      if (data.lastSyncTime && data.lastSyncTime !== "Never") {
+        lastSyncSpan.textContent = new Date(data.lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      } else {
+        lastSyncSpan.textContent = "Never";
+      }
     }
   );
 
@@ -16,15 +27,27 @@ document.addEventListener("DOMContentLoaded", () => {
     chrome.storage.local.get({ monitoringEnabled: true }, (data) => {
       const nextState = !data.monitoringEnabled;
       chrome.storage.local.set({ monitoringEnabled: nextState }, () => {
-        updateUI(nextState);
+        chrome.storage.local.get({ pairingToken: null, lastSyncStatus: "IDLE" }, (d) => {
+          updateUI(nextState, d.pairingToken, d.lastSyncStatus);
+        });
       });
     });
   });
 
-  function updateUI(enabled) {
+  function updateUI(enabled, pairingToken, syncStatus) {
+    if (!pairingToken) {
+      statusBadge.textContent = "Not Paired";
+      statusBadge.className = "status-badge paused";
+      toggleBtn.textContent = "Open Options to Pair";
+      toggleBtn.onclick = () => {
+        chrome.runtime.openOptionsPage();
+      };
+      return;
+    }
+
     if (enabled) {
-      statusBadge.textContent = "Monitoring";
-      statusBadge.className = "status-badge";
+      statusBadge.textContent = syncStatus.startsWith("AUTH_ERROR") ? "Auth Error" : "Monitoring";
+      statusBadge.className = syncStatus.startsWith("AUTH_ERROR") ? "status-badge paused" : "status-badge";
       toggleBtn.textContent = "Pause Monitoring";
       toggleBtn.className = "btn pause";
     } else {

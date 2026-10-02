@@ -33,8 +33,6 @@ async function runLiveIntegrationTest() {
 
   // Test identifiers (unique prefix to allow clean isolation & tear down)
   const testPrefix = `test-${Date.now()}`;
-  const orgA = "00000000-0000-0000-0000-000000000001";
-  const orgB = "00000000-0000-0000-0000-000000000002";
   const eventId1 = `${testPrefix}-ev-1`;
   const eventId2 = `${testPrefix}-ev-2`;
   const eventIdConcurrent = `${testPrefix}-ev-concurrent`;
@@ -43,7 +41,36 @@ async function runLiveIntegrationTest() {
   console.log(`[Config] Testing against live Supabase endpoint.`);
   console.log(`[Config] Test Prefix: ${testPrefix}`);
 
+  let orgA: string = crypto.randomUUID();
+  let orgB: string = crypto.randomUUID();
+
   try {
+    // 0. Seed test organizations in PostgreSQL for foreign key validity
+    const { error: errOrgA } = await supabase
+      .from("organizations")
+      .insert({
+        id: orgA,
+        name: `Test Org A ${testPrefix}`,
+        slug: `test-org-a-${testPrefix}`
+      });
+
+    if (errOrgA) {
+      throw new Error(`Failed to create test organization A: ${errOrgA.message}`);
+    }
+
+    const { error: errOrgB } = await supabase
+      .from("organizations")
+      .insert({
+        id: orgB,
+        name: `Test Org B ${testPrefix}`,
+        slug: `test-org-b-${testPrefix}`
+      });
+
+    if (errOrgB) {
+      throw new Error(`Failed to create test organization B: ${errOrgB.message}`);
+    }
+
+    console.log(`[Setup] Created live test organizations: OrgA=${orgA}, OrgB=${orgB}`);
     // 0. Verify Database Connectivity & Schema Presence
     const { error: pingError } = await supabase.from("usage_events").select("id").limit(1);
     if (pingError) {
@@ -241,6 +268,8 @@ async function runLiveIntegrationTest() {
     await supabase.from("sync_jobs").delete().eq("id", liveJob.id);
     await supabase.from("daily_usage").delete().eq("organization_id", orgA).eq("date", dateStr);
     await supabase.from("employee_usage_daily").delete().eq("organization_id", orgA).like("employee_id", `${testPrefix}%`);
+    if (orgA) await supabase.from("organizations").delete().eq("id", orgA);
+    if (orgB) await supabase.from("organizations").delete().eq("id", orgB);
     console.log("   Cleanup completed.");
 
     console.log("\n===============================================================================");

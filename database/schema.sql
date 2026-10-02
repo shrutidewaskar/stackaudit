@@ -1,57 +1,9 @@
 -- StackAudit Database Schema & Multi-Tenant Security Model
 
--- 1. Audits table (Public intake & authenticated history)
-CREATE TABLE IF NOT EXISTS public.audits (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  team_size INTEGER NOT NULL,
-  use_case TEXT NOT NULL,
-  total_current_monthly_spend NUMERIC NOT NULL,
-  total_optimized_monthly_spend NUMERIC NOT NULL,
-  total_monthly_savings NUMERIC NOT NULL,
-  total_annual_savings NUMERIC NOT NULL,
-  percentage_saved NUMERIC NOT NULL,
-  optimization_score TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL
-);
+-- Ensure schema extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE INDEX IF NOT EXISTS idx_audits_created_at ON public.audits(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audits_user_id ON public.audits(user_id);
-CREATE INDEX IF NOT EXISTS idx_audits_organization_id ON public.audits(organization_id);
-
--- Audit Tools table
-CREATE TABLE IF NOT EXISTS public.audit_tools (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  audit_id UUID NOT NULL REFERENCES public.audits(id) ON DELETE CASCADE,
-  tool TEXT NOT NULL,
-  current_plan TEXT NOT NULL,
-  recommended_plan TEXT NOT NULL,
-  monthly_spend NUMERIC NOT NULL,
-  monthly_savings NUMERIC NOT NULL,
-  reason TEXT NOT NULL,
-  severity TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_audit_tools_audit_id ON public.audit_tools(audit_id);
-
--- Leads table
-CREATE TABLE IF NOT EXISTS public.leads (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  audit_id UUID NOT NULL REFERENCES public.audits(id) ON DELETE CASCADE,
-  email TEXT NOT NULL,
-  company TEXT,
-  role TEXT,
-  team_size TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_leads_audit_id ON public.leads(audit_id);
-CREATE INDEX IF NOT EXISTS idx_leads_email ON public.leads(email);
-
--- 2. Organizations
+-- 1. Organizations (Core Tenant Entity)
 CREATE TABLE IF NOT EXISTS public.organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -112,6 +64,63 @@ CREATE TABLE IF NOT EXISTS public.workspaces (
 );
 
 CREATE INDEX IF NOT EXISTS idx_workspaces_organization_id ON public.workspaces(organization_id);
+
+-- 2. Audits & Leads
+CREATE TABLE IF NOT EXISTS public.audits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  team_size INTEGER NOT NULL,
+  use_case TEXT NOT NULL,
+  total_current_monthly_spend NUMERIC NOT NULL,
+  total_optimized_monthly_spend NUMERIC NOT NULL,
+  total_monthly_savings NUMERIC NOT NULL,
+  total_annual_savings NUMERIC NOT NULL,
+  percentage_saved NUMERIC NOT NULL,
+  optimization_score TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL
+);
+
+-- Ensure organization_id exists if audits was created previously
+ALTER TABLE IF EXISTS public.audits ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_audits_created_at ON public.audits(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audits_user_id ON public.audits(user_id);
+CREATE INDEX IF NOT EXISTS idx_audits_organization_id ON public.audits(organization_id);
+
+-- Audit Tools table
+CREATE TABLE IF NOT EXISTS public.audit_tools (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID NOT NULL REFERENCES public.audits(id) ON DELETE CASCADE,
+  tool TEXT NOT NULL,
+  current_plan TEXT NOT NULL,
+  recommended_plan TEXT NOT NULL,
+  monthly_spend NUMERIC NOT NULL,
+  monthly_savings NUMERIC NOT NULL,
+  reason TEXT NOT NULL,
+  severity TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_tools_audit_id ON public.audit_tools(audit_id);
+
+-- Leads table
+CREATE TABLE IF NOT EXISTS public.leads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID NOT NULL REFERENCES public.audits(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  company TEXT,
+  role TEXT,
+  team_size TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL
+);
+
+-- Ensure organization_id exists if leads was created previously
+ALTER TABLE IF EXISTS public.leads ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_leads_audit_id ON public.leads(audit_id);
+CREATE INDEX IF NOT EXISTS idx_leads_email ON public.leads(email);
 
 -- 3. Telemetry and Usage Events
 CREATE TABLE IF NOT EXISTS public.usage_events (
@@ -241,6 +250,9 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Ensure organization_id exists if chat_sessions was created previously
+ALTER TABLE IF EXISTS public.chat_sessions ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE;
+
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_org ON public.chat_sessions(organization_id);
 
 CREATE TABLE IF NOT EXISTS public.chat_messages (
@@ -262,6 +274,24 @@ CREATE TABLE IF NOT EXISTS public.conversation_memory (
   important_decisions JSONB DEFAULT '[]'::jsonb NOT NULL,
   last_updated TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- 6. Enrollment & Device Tokens
+CREATE TABLE IF NOT EXISTS public.enrollment_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  token_hash TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL DEFAULT 'Browser Extension Device',
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked', 'expired')),
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  revoked_at TIMESTAMP WITH TIME ZONE,
+  revoked_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  last_used_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_enrollment_tokens_hash ON public.enrollment_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_enrollment_tokens_org ON public.enrollment_tokens(organization_id);
 
 -- -------------------------------------------------------------
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -286,6 +316,40 @@ ALTER TABLE public.governance_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.enrollment_tokens ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if already present to ensure clean idempotent rerun
+DROP POLICY IF EXISTS "Public can insert audits" ON public.audits;
+DROP POLICY IF EXISTS "Users can read own audits or organization audits" ON public.audits;
+DROP POLICY IF EXISTS "Public can insert audit_tools" ON public.audit_tools;
+DROP POLICY IF EXISTS "Public can read audit_tools" ON public.audit_tools;
+DROP POLICY IF EXISTS "Public can insert leads" ON public.leads;
+DROP POLICY IF EXISTS "Organization members can read leads" ON public.leads;
+DROP POLICY IF EXISTS "Authenticated users can create organizations" ON public.organizations;
+DROP POLICY IF EXISTS "Members can view their organizations" ON public.organizations;
+DROP POLICY IF EXISTS "Org admins can manage organizations" ON public.organizations;
+DROP POLICY IF EXISTS "Users can add organization memberships" ON public.organization_members;
+DROP POLICY IF EXISTS "Members can view membership list" ON public.organization_members;
+DROP POLICY IF EXISTS "Org members can read departments" ON public.departments;
+DROP POLICY IF EXISTS "Org admins can manage departments" ON public.departments;
+DROP POLICY IF EXISTS "Org members can read employees" ON public.employees;
+DROP POLICY IF EXISTS "Org admins can manage employees" ON public.employees;
+DROP POLICY IF EXISTS "Org members can read workspaces" ON public.workspaces;
+DROP POLICY IF EXISTS "Org admins can manage workspaces" ON public.workspaces;
+DROP POLICY IF EXISTS "Org members can read usage_events" ON public.usage_events;
+DROP POLICY IF EXISTS "Org members can insert usage_events" ON public.usage_events;
+DROP POLICY IF EXISTS "Org members can read daily_usage" ON public.daily_usage;
+DROP POLICY IF EXISTS "Org members can manage daily_usage" ON public.daily_usage;
+DROP POLICY IF EXISTS "Org members can read employee_usage_daily" ON public.employee_usage_daily;
+DROP POLICY IF EXISTS "Org members can manage employee_usage_daily" ON public.employee_usage_daily;
+DROP POLICY IF EXISTS "Org members can read sync_jobs" ON public.sync_jobs;
+DROP POLICY IF EXISTS "Org members can manage sync_jobs" ON public.sync_jobs;
+DROP POLICY IF EXISTS "Org members can read governance_snapshots" ON public.governance_snapshots;
+DROP POLICY IF EXISTS "Org members can read governance_reports" ON public.governance_reports;
+DROP POLICY IF EXISTS "Users can access own chat sessions in their organization" ON public.chat_sessions;
+DROP POLICY IF EXISTS "Users can access messages for accessible sessions" ON public.chat_messages;
+DROP POLICY IF EXISTS "Org admins can manage enrollment_tokens" ON public.enrollment_tokens;
+DROP POLICY IF EXISTS "Org members can read enrollment_tokens" ON public.enrollment_tokens;
 
 -- 1. Public / Audit Policies (Intentionally supported public intake)
 CREATE POLICY "Public can insert audits" ON public.audits FOR INSERT WITH CHECK (true);
@@ -311,6 +375,7 @@ CREATE POLICY "Organization members can read leads" ON public.leads FOR SELECT U
 );
 
 -- 2. Organizations & Members Policies
+CREATE POLICY "Authenticated users can create organizations" ON public.organizations FOR INSERT WITH CHECK (true);
 CREATE POLICY "Members can view their organizations" ON public.organizations FOR SELECT USING (
   EXISTS (
     SELECT 1 FROM public.organization_members
@@ -318,13 +383,18 @@ CREATE POLICY "Members can view their organizations" ON public.organizations FOR
     AND organization_members.user_id = auth.uid()
   )
 );
-
-CREATE POLICY "Members can view membership list" ON public.organization_members FOR SELECT USING (
+CREATE POLICY "Org admins can manage organizations" ON public.organizations FOR ALL USING (
   EXISTS (
-    SELECT 1 FROM public.organization_members AS m
-    WHERE m.organization_id = organization_members.organization_id
-    AND m.user_id = auth.uid()
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = organizations.id
+    AND organization_members.user_id = auth.uid()
+    AND organization_members.role IN ('owner', 'admin')
   )
+);
+
+CREATE POLICY "Users can add organization memberships" ON public.organization_members FOR INSERT WITH CHECK (true);
+CREATE POLICY "Members can view membership list" ON public.organization_members FOR SELECT USING (
+  user_id = auth.uid()
 );
 
 -- 3. Tenant-Scoped Enterprise Tables
@@ -478,3 +548,23 @@ CREATE POLICY "Users can access messages for accessible sessions" ON public.chat
     )
   )
 );
+
+-- 6. Enrollment Tokens RLS
+CREATE POLICY "Org admins can manage enrollment_tokens" ON public.enrollment_tokens FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = enrollment_tokens.organization_id
+    AND organization_members.user_id = auth.uid()
+    AND organization_members.role IN ('owner', 'admin', 'manager')
+  )
+);
+
+CREATE POLICY "Org members can read enrollment_tokens" ON public.enrollment_tokens FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE organization_members.organization_id = enrollment_tokens.organization_id
+    AND organization_members.user_id = auth.uid()
+  )
+);
+
+

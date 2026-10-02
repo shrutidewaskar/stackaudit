@@ -41,7 +41,8 @@ export class NormalizationService {
     return this.toolMap.get(clean) || clean;
   }
 
-  public static normalizeDomain(input: string): string {
+  public static normalizeDomain(input?: string | null): string {
+    if (!input) return "";
     const clean = input.trim().toLowerCase();
     if (clean.includes("openai.com")) return "chat.openai.com";
     if (clean.includes("claude.ai")) return "claude.ai";

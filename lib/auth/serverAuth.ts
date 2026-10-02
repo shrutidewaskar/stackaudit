@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { membershipService, RoleType, RolePermissions } from "@/services/enterprise/MembershipService";
+import { enrollmentTokenService } from "@/services/enterprise/EnrollmentTokenService";
 import { isExplicitDevMode, AuthUser } from "./devMode";
 
 export interface AuthenticatedContext {
@@ -26,12 +27,24 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<AuthUs
   }
 
   if (token) {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      if (!error && user && user.id) {
+    // Check enrollment token in authorization header (format: Bearer stk_enroll_...)
+    if (token.startsWith("stk_enroll_")) {
+      const record = await enrollmentTokenService.validateToken(token);
+      if (record) {
         return {
-          id: user.id,
-          email: user.email || ""
+          id: `ext-device-${record.id}`,
+          email: `device@stackaudit.local`
+        };
+      }
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.getUser(token).catch(() => ({ data: { user: null }, error: null }));
+      if (!error && data?.user?.id) {
+        return {
+          id: data.user.id,
+          email: data.user.email || ""
         };
       }
     } catch {
@@ -85,6 +98,40 @@ export async function requireOrganizationMember(
 
   const user = userResult.user;
 
+  // If this is an extension device token, look up its bound organization exclusively from the token record
+  if (user.id.startsWith("ext-device-")) {
+    const authHeader = request.headers.get("authorization");
+    const rawToken = authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "";
+    const record = await enrollmentTokenService.validateToken(rawToken);
+
+    if (!record) {
+      return {
+        response: NextResponse.json(
+          { error: "Unauthorized: Enrollment token is invalid, expired, or revoked." },
+          { status: 401 }
+        )
+      };
+    }
+
+    // Strict tenant boundary: targetOrgId must match token record organization_id if provided
+    if (targetOrgId && targetOrgId !== record.organization_id) {
+      return {
+        response: NextResponse.json(
+          { error: "Forbidden: Token is not authorized for the requested organization." },
+          { status: 403 }
+        )
+      };
+    }
+
+    return {
+      auth: {
+        user,
+        organizationId: record.organization_id,
+        role: "member"
+      }
+    };
+  }
+
   // Determine intended organization ID: passed parameter or extracted from searchParams/headers
   const requestedOrgId =
     targetOrgId ||
@@ -98,7 +145,8 @@ export async function requireOrganizationMember(
   // In test/dev mode with mock seeder:
   if (!userMembership && isExplicitDevMode()) {
     const defaultOrg = "novatech-labs-uuid";
-    const testMember = await membershipService.getMember(requestedOrgId || defaultOrg, user.id);
+    const targetOrg = requestedOrgId || defaultOrg;
+    const testMember = await membershipService.getMember(targetOrg, user.id);
     if (testMember && testMember.status === "active") {
       userMembership = testMember;
     } else if (!requestedOrgId && user.id === "user-uuid-1") {
