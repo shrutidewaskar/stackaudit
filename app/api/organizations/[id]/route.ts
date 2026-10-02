@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { organizationService } from "@/services/enterprise/OrganizationService";
-import { requireOrganizationMember, requireRole } from "@/lib/auth/serverAuth";
+import { requireOrganizationMember } from "@/lib/auth/serverAuth";
 
 export async function GET(
   request: NextRequest,
